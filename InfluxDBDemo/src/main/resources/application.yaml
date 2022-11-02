@@ -1,0 +1,12 @@
+server:
+  port: 16080
+
+logging:
+  file:
+    path: ./logs/spring.log
+
+spring:
+  influx:
+    url: http://192.168.1.101:8086
+    user: root
+    password: root
