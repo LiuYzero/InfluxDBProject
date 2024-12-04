@@ -4,10 +4,8 @@ package com.liuyang.iotinfluxdb_api.aop;
 import com.alibaba.fastjson.JSONObject;
 import com.liuyang.iotinfluxdb_api.services.DBService;
 import org.aspectj.lang.JoinPoint;
-import org.aspectj.lang.annotation.AfterReturning;
-import org.aspectj.lang.annotation.Aspect;
-import org.aspectj.lang.annotation.Before;
-import org.aspectj.lang.annotation.Pointcut;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,12 +30,44 @@ public class DBInsertAspect {
     @Pointcut("execution(public * com.liuyang.iotinfluxdb_api.controller.InfluxDBApi.*(..))")
     public void webLog(){}
 
-    @Before("webLog()")
+//    @Before("webLog()")
     public void doBefore(){
-        startTime = System.currentTimeMillis();
+
     }
 
-    @AfterReturning(returning = "ret", pointcut = "webLog()")
+    @Around("webLog()")
+    public Object recordCostTime(ProceedingJoinPoint joinPoint) {
+        Long startTime2 = System.currentTimeMillis();
+
+        Object result = "";
+        try {
+            result = joinPoint.proceed();
+        } catch (Throwable e) {
+            logger.error("error: ", e);
+        }finally {
+            logger.info("recordCostTime : {} ms", System.currentTimeMillis() - startTime2);
+            Long costTime = System.currentTimeMillis() - startTime2;
+
+            JSONObject interfaceData = new JSONObject();
+            interfaceData.put("database", "db_iot");
+            interfaceData.put("table","t_interface");
+            JSONObject tags = new JSONObject();
+            tags.put("interface", environment.getProperty("spring.application.name")+"/controller/InfluxDBApi."+joinPoint.getSignature().getName());
+
+            JSONObject fields = new JSONObject();
+            fields.put("costTime", costTime);
+
+            interfaceData.put("tags", tags);
+            interfaceData.put("fields", fields);
+
+            logger.info("aop minioData: {}", interfaceData);
+            dbService.insertData(interfaceData);
+        }
+
+        return result;
+    }
+
+//    @AfterReturning(returning = "ret", pointcut = "webLog()")
     public void doAfterReturing(JoinPoint joinPoint, Object ret){
         logger.info("Time-Consuming: {} ms", System.currentTimeMillis() - startTime);
         Long costTime = System.currentTimeMillis() - startTime;
